@@ -378,7 +378,7 @@
   }
 
   // Tombol "Simpan foto ini". Mengunduh langsung di dalam halaman (tanpa
-  // pindah ke Google Drive): file diambil lewat endpoint usercontent yang
+  // pindah ke Google Drive): file diambil lewat Drive API (alt=media) yang
   // mengizinkan CORS, lalu disimpan sebagai blob dengan nama asli.
   function attachDownload(btn, id, name) {
     btn.addEventListener('click', function (ev) {
