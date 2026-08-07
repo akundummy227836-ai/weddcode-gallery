@@ -330,24 +330,21 @@
       var p = photos[pos];
       var item = document.createElement('div');
       item.className = 'item';
-      var img = document.createElement('img');
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.alt = p.name || 'foto';
-      img.src = thumbUrl(p.id);
-      img.dataset.full = fullUrl(p.id);
-      img.dataset.idx = pos;
-      item.appendChild(img);
+      item.dataset.idx = pos;
+      var image = document.createElement('img');
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      image.alt = p.name || 'foto';
+      image.src = thumbUrl(p.id);
+      image.dataset.full = fullUrl(p.id);
+      item.appendChild(image);
       var dlMini = document.createElement('button');
       dlMini.className = 'dl-mini';
       dlMini.innerHTML = '&#8595;';
       dlMini.title = 'Simpan foto ini';
-      dlMini.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        downloadById(p.id, p.name);
-      });
+      attachDownload(dlMini, p.id, p.name);
       item.appendChild(dlMini);
-      item.addEventListener('click', function () { openLightbox(parseInt(img.dataset.idx, 10)); });
+      item.addEventListener('click', function () { openLightbox(parseInt(this.dataset.idx, 10)); });
       frag.appendChild(item);
     }
     gallery.appendChild(frag);
@@ -380,34 +377,38 @@
     openLightbox(n);
   }
 
-  // Tombol "Simpan foto ini": ambil file asli via Drive lalu unduh lewat blob
-  // (agar selalu file full-res, bukan versi kompresi).
-  function downloadById(id, name) {
-    return fetch(fullUrl(id)).then(function (r) { return r.blob(); }).then(function (blob) {
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = name || 'foto';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function () {
-        URL.revokeObjectURL(a.href);
-        a.remove();
-      }, 1200);
+  // Tombol "Simpan foto ini". Membuka link unduhan resmi Drive (export=download)
+  // via elemen <a>: tidak butuh CORS (fetch ke drive.google.com diblokir browser),
+  // browser menangani proses unduh dengan nama file asli.
+  function attachDownload(btn, id, name) {
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      downloadById(id, name);
     });
   }
+
+  function downloadById(id, name) {
+    var a = document.createElement('a');
+    a.href = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(id);
+    a.download = name || 'foto';
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { a.remove(); }, 400);
+  }
+
   function downloadCurrent() {
     var p = photos[cur];
     if (!p) return;
     lbDl.disabled = true;
-    lbDlText.textContent = 'Menyiapkan...';
-    downloadById(p.id, p.name).then(function () {
+    lbDlText.textContent = 'Mengunduh...';
+    downloadById(p.id, p.name);
+    setTimeout(function () {
       lbDl.disabled = false;
       lbDlText.textContent = 'Simpan foto ini';
-    }).catch(function () {
-      lbDl.disabled = false;
-      lbDlText.textContent = 'Gagal, coba lagi';
-      setTimeout(function () { lbDlText.textContent = 'Simpan foto ini'; }, 1800);
-    });
+    }, 1500);
   }
 
   var lightbox = $('lightbox'), lbImg = $('lbImg'), lbDl = $('lbDownload'), lbDlText = $('lbDlText');
