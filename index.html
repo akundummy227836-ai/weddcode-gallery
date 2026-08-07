@@ -247,7 +247,18 @@
   var gallery = $('gallery'), statusBox = $('statusBox'),
       countEl = $('gCount'), loadMore = $('loadMore');
 
-  var folderId = null, photos = [], pos = 0, cur = -1, token = null, title = '', vendorLogoId = null;
+  var folderId = null, title = '';
+  var photos = [], pos = 0, token = null, curId = null;
+  var seen = {}; // id -> true, untuk deteksi foto baru
+
+  function findPhoto(fid) {
+    for (var i = 0; i < photos.length; i++) if (photos[i].id === fid) return photos[i];
+    return null;
+  }
+  function indexOfId(fid) {
+    for (var i = 0; i < photos.length; i++) if (photos[i].id === fid) return i;
+    return -1;
+  }
 
   function params() {
     var q = location.search.substring(1).split('&'), out = {};
@@ -324,57 +335,128 @@
     });
   }
 
+  function updateCount() {
+    countEl.textContent = photos.length + ' foto' + (title ? ' \u00b7 ' + title : '');
+  }
+
+  function buildItem(p) {
+    var item = document.createElement('div');
+    item.className = 'item';
+    item.dataset.id = p.id;
+    var image = document.createElement('img');
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.alt = p.name || 'foto';
+    image.src = thumbUrl(p.id);
+    item.appendChild(image);
+    var dlMini = document.createElement('button');
+    dlMini.className = 'dl-mini';
+    dlMini.innerHTML = '&#8595;';
+    dlMini.title = 'Simpan foto ini';
+    attachDownload(dlMini, p.id, p.name);
+    item.appendChild(dlMini);
+    item.addEventListener('click', function () { openLightbox(this.dataset.id); });
+    return item;
+  }
+
+  // Render semua foto yang belum dirender (append di akhir, urutan paling lama).
+  // Ambil halaman foto TERATAS (terbaru) tanpa menampilkan error UI;
+  // dipakai untuk refresh otomatis (polling).
+  function fetchTop(cb) {
+    var url = 'https://www.googleapis.com/drive/v3/files?q=' +
+      encodeURIComponent("'" + folderId + "' in parents and mimeType contains 'image/' and name != 'vendor_logo.png'") +
+      '&fields=nextPageToken,files(id,name,createdTime)' +
+      '&pageSize=' + PAGE_SIZE +
+      '&orderBy=createdTime desc' +
+      '&key=' + API_KEY;
+    api(url, cb, function () {});
+  }
+
+  /** Polling otomatis: foto baru muncul sendiri di atas galeri. */
+  var firstCheckDone = false;
+  function refreshTick() {
+    fetchTop(function (j) {
+      var files = j.files || [];
+      if (!firstCheckDone) {
+        firstCheckDone = true;
+        token = j.nextPageToken || null;
+        if (!files.length) {
+          showStatus('<h2>Belum ada foto</h2><p>Folder ini masih kosong. Halaman ini otomatis memuat foto begitu ada yang diunggah.</p>');
+          return;
+        }
+        photos = files.slice();
+        for (var i = 0; i < photos.length; i++) seen[photos[i].id] = true;
+        hideStatus();
+        renderMore();
+        loadMore.hidden = !token;
+      } else {
+        var added = prependNew(files);
+        if (added && statusBox.style.display !== 'none') hideStatus();
+      }
+    });
+  }
+
   function renderMore() {
     var frag = document.createDocumentFragment();
     for (; pos < photos.length; pos++) {
-      var p = photos[pos];
-      var item = document.createElement('div');
-      item.className = 'item';
-      item.dataset.idx = pos;
-      var image = document.createElement('img');
-      image.loading = 'lazy';
-      image.decoding = 'async';
-      image.alt = p.name || 'foto';
-      image.src = thumbUrl(p.id);
-      image.dataset.full = fullUrl(p.id);
-      item.appendChild(image);
-      var dlMini = document.createElement('button');
-      dlMini.className = 'dl-mini';
-      dlMini.innerHTML = '&#8595;';
-      dlMini.title = 'Simpan foto ini';
-      attachDownload(dlMini, p.id, p.name);
-      item.appendChild(dlMini);
-      item.addEventListener('click', function () { openLightbox(parseInt(this.dataset.idx, 10)); });
-      frag.appendChild(item);
+      frag.appendChild(buildItem(photos[pos]));
     }
     gallery.appendChild(frag);
-    countEl.textContent = photos.length + ' foto' + (title ? ' \u00b7 ' + title : '');
+    updateCount();
     loadMore.hidden = !token;
+  }
+
+  // Sisipkan foto baru (dari polling otomatis) di ATAS galeri.
+  // `files` sudah terurut terbaru dulu; iterasi mundur supaya urutan akhir benar.
+  function prependNew(files) {
+    var added = 0;
+    for (var i = files.length - 1; i >= 0; i--) {
+      var f = files[i];
+      if (seen[f.id]) continue;
+      seen[f.id] = true;
+      photos.unshift(f);
+      gallery.insertBefore(buildItem(f), gallery.firstChild);
+      added++;
+    }
+    if (added) {
+      pos = photos.length; // semua sudah ter-render
+      updateCount();
+    }
+    return added;
   }
 
   function nextPage() {
     if (!token) { loadMore.hidden = true; return; }
     fetchPage(token, function (j) {
-      if (j.files && j.files.length) {
-        photos = photos.concat(j.files);
-        renderMore();
+      var added = 0;
+      for (var i = 0; i < (j.files || []).length; i++) {
+        var f = j.files[i];
+        if (seen[f.id]) continue;
+        seen[f.id] = true;
+        photos.push(f);
+        added++;
       }
+      if (added) renderMore();
       token = j.nextPageToken || null;
       loadMore.hidden = !token;
     });
   }
 
-  function openLightbox(idx) {
-    cur = idx;
+  function openLightbox(fid) {
+    curId = fid;
+    var photo = findPhoto(fid);
+    if (!photo) return;
     // Tampilkan pakai thumbnail ukuran besar (lebih andal daripada uc?export=view
     // yang sering diblokir/ditahan Google).
-    lbImg.src = thumbUrl(photos[idx].id, 'w2000');
+    lbImg.src = thumbUrl(photo.id, 'w2000');
     lightbox.classList.add('open');
   }
-  function closeLightbox() { lightbox.classList.remove('open'); lbImg.src = ''; lbDl.classList.remove('busy'); lbDl.disabled = false; lbDlText.textContent = 'Simpan foto ini'; }
+  function closeLightbox() { lightbox.classList.remove('open'); lbImg.src = ''; lbDl.disabled = false; lbDlText.textContent = 'Simpan foto ini'; }
   function step(dir) {
-    var n = (cur + dir + photos.length) % photos.length;
-    openLightbox(n);
+    var idx = indexOfId(curId);
+    if (idx < 0) return;
+    var n = (idx + dir + photos.length) % photos.length;
+    openLightbox(photos[n].id);
   }
 
   // Tombol "Simpan foto ini". Mengunduh langsung di dalam halaman (tanpa
@@ -419,7 +501,7 @@
   }
 
   function downloadCurrent() {
-    var p = photos[cur];
+    var p = findPhoto(curId);
     if (!p) return;
     lbDl.disabled = true;
     lbDlText.textContent = 'Mengunduh...';
@@ -496,17 +578,10 @@
     }
   }).catch(function () {});
 
-  fetchPage(null, function (j) {
-    photos = j.files || [];
-    token = j.nextPageToken || null;
-    if (!photos.length) {
-      showStatus('<h2>Belum ada foto</h2><p>Folder ini masih kosong. Foto-foto akan muncul otomatis begitu ada yang diunggah.</p>');
-      return;
-    }
-    hideStatus();
-    renderMore();
-    loadMore.hidden = !token;
-  });
+  refreshTick();
+
+  // Refresh otomatis setiap 15 detik
+  setInterval(refreshTick, 15000);
 })();
 </script>
 </body>
