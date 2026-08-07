@@ -274,14 +274,25 @@
     api(url, cb, function (err) {
       var code = err && err.code;
       if (code === 403 || code === 404) {
-        showStatus(
-          '<h2>Galeri belum bisa dibuka</h2>' +
-          '<p>Folder Drive ini belum dibagikan sebagai publik. ' +
-          'Di Google Drive, buka folder &rarr; <b>Bagikan</b> &rarr; ' +
-          '<b>Umum</b> &rarr; <b>Siapa saja dengan link</b> &rarr; <b>Penonton</b>. ' +
-          'Atau pastikan link galeri ini benar.</p>', true);
+        if (code === 404) {
+          showStatus(
+            '<h2>Folder tidak ditemukan</h2>' +
+            '<p>Drive tidak menemukan folder dengan ID ini (kode 404). ' +
+            'ID di link galeri mungkin salah, atau folder-nya sudah dihapus/dipindah. ' +
+            'Coba buat ulang folder lewat aplikasi WeddCode.</p>', true);
+        } else {
+          showStatus(
+            '<h2>Galeri belum bisa dibuka</h2>' +
+            '<p>Folder Drive ini belum terlihat publik oleh Google (kode 403). ' +
+            'Di Google Drive: buka folder galerinya &rarr; <b>Bagikan</b> &rarr; ' +
+            '<b>Umum</b> &rarr; <b>Siapa saja dengan link</b> &rarr; <b>Penonton</b>. ' +
+            'Tunggu 1&ndash;2 menit lalu muat ulang halaman ini.</p>', true);
+        }
       } else {
-        showStatus('<h2>Terjadi kesalahan</h2><p>' + (err && err.message ? err.message : 'Gagal memuat galeri. Coba lagi nanti.') + '</p>', true);
+        showStatus('<h2>Terjadi kesalahan</h2><p>' +
+          'Kode ' + (code || '?') + ': ' +
+          (err && err.message ? err.message : 'Gagal memuat galeri. Coba lagi nanti.') +
+          '</p>', true);
       }
     });
   }
