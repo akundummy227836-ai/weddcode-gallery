@@ -163,6 +163,7 @@
     border-radius: 3px;
     transition: transform .16s cubic-bezier(.25,.8,.35,1);
     will-change: transform;
+    z-index: 1;
   }
   .lightbox img.dragging { transition: none; }
   .lightbox img.no-anim { transition: none; }
@@ -183,6 +184,7 @@
     cursor: pointer;
     transition: background .2s, transform .2s;
     text-decoration: none;
+    z-index: 3;
   }
   .lightbox .dl:hover { background: #9c7a45; transform: translateX(-50%) scale(1.03); }
   .lightbox .dl:disabled { opacity: .6; cursor: default; transform: translateX(-50%); }
@@ -199,6 +201,8 @@
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: background .2s;
+    z-index: 3;
+    touch-action: manipulation;
   }
   .lightbox .btn:hover { background: rgba(255,255,255,.18); }
   .lightbox .btn.prev { left: 18px; }
@@ -576,9 +580,11 @@
   var lightbox = $('lightbox'), lbImg = $('lbImg'), lbDl = $('lbDownload'), lbDlText = $('lbDlText');
 
   // Swipe kiri/kanan untuk pindah foto (HP): foto mengikuti jari,
-  // lalu meluncur halus saat dilepas.
+  // lalu meluncur halus saat dilepas. Drag hanya dimulai dari gambar,
+  // agar tombol panah tetap responsif disentuh.
   var touchX = null, swiping = false;
   lightbox.addEventListener('touchstart', function (e) {
+    if (e.target !== lbImg) return;
     touchX = e.touches[0].clientX;
     swiping = true;
     lbImg.classList.add('dragging');
