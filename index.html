@@ -98,23 +98,28 @@
   }
   .item:hover { transform: translateY(-4px) rotate(-.4deg); box-shadow: 0 10px 28px rgba(43,38,32,.16); }
   .item img { width: 100%; display: block; border-radius: 2px; background: #efe9df; }
-  .dl-mini {
-    position: absolute;
-    right: 20px; bottom: 20px;
-    width: 36px; height: 36px;
+  .dl-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--gold);
     border: none;
-    border-radius: 50%;
-    background: rgba(255,255,255,.92);
-    color: var(--ink);
-    font-size: 16px;
-    line-height: 1;
+    border-radius: 30px;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(43,38,32,.25);
-    transition: background .2s, color .2s, transform .2s;
-    display: flex; align-items: center; justify-content: center;
+    transition: background .2s, transform .2s;
   }
-  .dl-mini:hover { background: var(--gold); color: #fff; transform: scale(1.08); }
-  .dl-mini:disabled { opacity: .6; cursor: default; transform: none; }
+  .dl-card:hover { background: #9c7a45; transform: translateY(-1px); }
+  .dl-card:disabled { opacity: .6; cursor: default; transform: none; }
+  .dl-card .dl-icon { font-size: 14px; line-height: 1; }
   .loadmore {
     display: block;
     margin: 10px auto 60px;
@@ -368,8 +373,8 @@
     attachThumb(image, p.id);
     item.appendChild(image);
     var dlMini = document.createElement('button');
-    dlMini.className = 'dl-mini';
-    dlMini.innerHTML = '&#8595;';
+    dlMini.className = 'dl-card';
+    dlMini.innerHTML = '<span class="dl-icon">&#8595;</span><span>Simpan foto ini</span>';
     dlMini.title = 'Simpan foto ini';
     attachDownload(dlMini, p.id, p.name);
     item.appendChild(dlMini);
