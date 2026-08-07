@@ -164,6 +164,7 @@
     transition: transform .16s cubic-bezier(.25,.8,.35,1);
     will-change: transform;
     z-index: 1;
+    touch-action: none;
   }
   .lightbox img.dragging { transition: none; }
   .lightbox img.no-anim { transition: none; }
@@ -478,17 +479,20 @@
     var photo = findPhoto(fid);
     if (!photo) return;
     attachThumb(lbImg, photo.id);
-    // Reset posisi tanpa animasi agar foto baru mulai dari tengah
+    // Reset posisi & zoom tanpa animasi agar foto baru mulai dari tengah
+    scale = 1; offX = 0; offY = 0;
     lbImg.classList.add('no-anim');
     lbImg.style.transform = 'translateX(0)';
     void lbImg.offsetWidth;
     lbImg.classList.remove('no-anim');
+    lastTapTime = 0;
     lightbox.classList.add('open');
   }
   function closeLightbox() {
     navToken++;
     lightbox.classList.remove('open');
     lbImg.src = '';
+    scale = 1; offX = 0; offY = 0;
     lbImg.style.transform = 'translateX(0)';
     lbImg.classList.remove('dragging');
     lbDl.disabled = false;
@@ -507,6 +511,8 @@
   var navToken = 0;
   function slideTo(dir) {
     if (!curId) return;
+    // Jika foto sedang dizoom, kembalikan ke fit dulu tanpa animasi
+    if (scale !== 1) { scale = 1; offX = 0; offY = 0; }
     var token = navToken;
     var dist = Math.max((lbImg.clientWidth || window.innerWidth) * 0.6, 160);
     lbImg.style.transform = 'translateX(' + (dir > 0 ? -dist : dist) + 'px)';
@@ -579,33 +585,161 @@
 
   var lightbox = $('lightbox'), lbImg = $('lbImg'), lbDl = $('lbDownload'), lbDlText = $('lbDlText');
 
-  // Swipe kiri/kanan untuk pindah foto (HP): foto mengikuti jari,
-  // lalu meluncur halus saat dilepas. Drag hanya dimulai dari gambar,
-  // agar tombol panah tetap responsif disentuh.
-  var touchX = null, swiping = false;
+  // Interaksi sentuh di lightbox:
+  //  - 2 jari (pinch)  = zoom masuk/keluar, mengikuti titik tengah jari
+  //  - 1 jari, belum zoom = swipe untuk ganti foto
+  //  - 1 jari, sudah zoom  = pan (menggeser foto yang dizoom)
+  //  - ketuk 2x = zoom masuk di titik sentuh; jika sudah zoom, kembali ke fit
+  var touchX = null, touchY = null, swiping = false, panning = false;
+  var panOX = 0, panOY = 0;
+  var scale = 1, offX = 0, offY = 0;
+  var pinch = null;
+  var lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+
+  function applyZoom() {
+    lbImg.style.transform = 'translate(' + offX + 'px,' + offY + 'px) scale(' + scale + ')';
+  }
+  // Batas geser agar foto tidak keluar dari layar saat zoom
+  function panBounds() {
+    var iw = lbImg.offsetWidth * scale, ih = lbImg.offsetHeight * scale;
+    var cw = lightbox.clientWidth, ch = lightbox.clientHeight;
+    return {
+      x: Math.max(0, (iw - cw) / 2),
+      y: Math.max(0, (ih - ch) / 2)
+    };
+  }
+  function clampPan() {
+    var b = panBounds();
+    offX = Math.max(-b.x, Math.min(b.x, offX));
+    offY = Math.max(-b.y, Math.min(b.y, offY));
+  }
+  function toggleZoom(px, py) {
+    if (scale > 1) {
+      // Kembali ke kondisi fit
+      scale = 1; offX = 0; offY = 0;
+      lbImg.classList.remove('dragging');
+      lbImg.style.transform = 'translateX(0)';
+    } else {
+      // Zoom masuk di titik sentuh (2.5x)
+      scale = 2.5;
+      offX = px - (px - offX) * scale;
+      offY = py - (py - offY) * scale;
+      clampPan();
+      lbImg.classList.remove('dragging');
+      applyZoom();
+    }
+  }
+
   lightbox.addEventListener('touchstart', function (e) {
     if (e.target !== lbImg) return;
-    touchX = e.touches[0].clientX;
-    swiping = true;
-    lbImg.classList.add('dragging');
-  }, { passive: true });
-  lightbox.addEventListener('touchmove', function (e) {
-    if (!swiping) return;
-    var dx = e.touches[0].clientX - touchX;
-    lbImg.style.transform = 'translateX(' + (dx * 0.7) + 'px)';
-  }, { passive: true });
-  lightbox.addEventListener('touchend', function (e) {
-    if (!swiping) return;
-    swiping = false;
-    lbImg.classList.remove('dragging');
-    var dx = e.changedTouches[0].clientX - touchX;
-    touchX = null;
-    if (Math.abs(dx) > 48) {
-      slideTo(dx < 0 ? 1 : -1);
-    } else {
-      lbImg.style.transform = 'translateX(0)';
+    if (e.touches.length === 2) {
+      swiping = false; panning = false;
+      pinch = {
+        d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                      e.touches[0].clientY - e.touches[1].clientY),
+        s: scale, ox: offX, oy: offY
+      };
+      lbImg.classList.add('dragging');
+      return;
+    }
+    if (e.touches.length === 1) {
+      touchX = e.touches[0].clientX;
+      touchY = e.touches[0].clientY;
+      if (scale > 1) {
+        panning = true;
+        panOX = offX; panOY = offY;
+      } else {
+        swiping = true;
+      }
+      lbImg.classList.add('dragging');
     }
   }, { passive: true });
+  lightbox.addEventListener('touchmove', function (e) {
+    if (pinch && e.touches.length >= 2) {
+      var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                         e.touches[0].clientY - e.touches[1].clientY);
+      var ns = Math.max(1, Math.min(5, pinch.s * (d / pinch.d)));
+      // Titik tengah jari sebagai jangkar agar zoom terasa alami
+      var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      offX = mx - (mx - offX) * (ns / scale);
+      offY = my - (my - offY) * (ns / scale);
+      scale = ns;
+      clampPan();
+      applyZoom();
+      return;
+    }
+    if (e.touches.length === 1) {
+      var x = e.touches[0].clientX, y = e.touches[0].clientY;
+      if (pinch) {
+        // Satu jari diangkat saat pinch -> lanjut sebagai pan
+        pinch = null;
+        panning = true;
+        panOX = offX; panOY = offY;
+        touchX = x; touchY = y;
+      }
+      if (panning) {
+        var b = panBounds();
+        offX = Math.max(-b.x, Math.min(b.x, panOX + (x - touchX)));
+        offY = Math.max(-b.y, Math.min(b.y, panOY + (y - touchY)));
+        applyZoom();
+      } else if (swiping) {
+        lbImg.style.transform = 'translateX(' + ((x - touchX) * 0.7) + 'px)';
+      }
+    }
+  }, { passive: true });
+  lightbox.addEventListener('touchend', function (e) {
+    if (pinch) {
+      if (e.touches.length === 1) {
+        // Lanjut pan dengan jari yang tersisa
+        pinch = null;
+        panning = true;
+        panOX = offX; panOY = offY;
+        var r = e.touches[0];
+        touchX = r.clientX; touchY = r.clientY;
+        return;
+      }
+      if (e.touches.length === 0) {
+        pinch = null;
+        lbImg.classList.remove('dragging');
+        if (scale === 1) applyZoom();
+        return;
+      }
+      return;
+    }
+    if (swiping) {
+      swiping = false;
+      lbImg.classList.remove('dragging');
+      var dx = e.changedTouches[0].clientX - touchX;
+      touchX = null;
+      if (Math.abs(dx) > 48) {
+        slideTo(dx < 0 ? 1 : -1);
+      } else {
+        lbImg.style.transform = 'translateX(0)';
+      }
+      return;
+    }
+    if (panning) {
+      panning = false;
+      lbImg.classList.remove('dragging');
+      return;
+    }
+    // Deteksi ketuk ganda untuk zoom / kembali ke fit
+    var t = e.changedTouches[0];
+    var now = Date.now();
+    if (now - lastTapTime < 300 &&
+        Math.abs(t.clientX - lastTapX) < 30 && Math.abs(t.clientY - lastTapY) < 30) {
+      lastTapTime = 0;
+      toggleZoom(t.clientX, t.clientY);
+    } else {
+      lastTapTime = now;
+      lastTapX = t.clientX;
+      lastTapY = t.clientY;
+    }
+  }, { passive: true });
+  lbImg.addEventListener('dblclick', function (e) {
+    toggleZoom(e.clientX, e.clientY);
+  });
 
   $('lbClose').addEventListener('click', closeLightbox);
   $('lbPrev').addEventListener('click', function () { slideTo(-1); });
