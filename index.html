@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeddCode Gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #faf7f2;
+    --ink: #2b2620;
+    --gold: #b08d57;
+    --muted: #8a8276;
+    --card: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+  }
+  header {
+    text-align: center;
+    padding: 64px 20px 8px;
+  }
+  header .brand {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 15px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 600;
+    margin-top: 14px;
+    line-height: 1.2;
+  }
+  header .divider {
+    width: 56px; height: 1px; background: var(--gold);
+    margin: 22px auto 0;
+  }
+  header .count {
+    margin-top: 18px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .status {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 15px;
+  }
+  .status .spin {
+    width: 28px; height: 28px;
+    border: 2px solid var(--gold); border-top-color: transparent;
+    border-radius: 50%;
+    margin: 0 auto 18px;
+    animation: rot 0.9s linear infinite;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .status.err .spin { display: none; }
+  .status.err { color: #9c3b3b; }
+  .status h2 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--ink); margin-bottom: 10px; font-weight: 600; }
+  .status p { max-width: 460px; margin: 0 auto; line-height: 1.7; }
+  .gallery {
+    columns: 4 260px;
+    column-gap: 18px;
+    padding: 40px 22px 30px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+  .item {
+    break-inside: avoid;
+    margin-bottom: 18px;
+    background: var(--card);
+    padding: 10px 10px 14px;
+    box-shadow: 0 2px 10px rgba(43,38,32,.08);
+    border-radius: 3px;
+    transition: transform .25s ease, box-shadow .25s ease;
+    cursor: zoom-in;
+  }
+  .item:hover { transform: translateY(-4px) rotate(-.4deg); box-shadow: 0 10px 28px rgba(43,38,32,.16); }
+  .item img { width: 100%; display: block; border-radius: 2px; background: #efe9df; }
+  .item .cap {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    padding-top: 10px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .loadmore {
+    display: block;
+    margin: 10px auto 60px;
+    padding: 12px 34px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--gold);
+    border-radius: 40px;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  .loadmore:hover { background: var(--gold); color: #fff; }
+  .loadmore[hidden] { display: none; }
+  footer {
+    text-align: center;
+    padding: 30px 20px 46px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  footer .heart { color: var(--gold); }
+  /* Lightbox */
+  .lightbox {
+    position: fixed; inset: 0;
+    background: rgba(18,15,12,.94);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img {
+    max-width: 92vw;
+    max-height: 88vh;
+    box-shadow: 0 8px 60px rgba(0,0,0,.6);
+    border-radius: 3px;
+  }
+  .lightbox .lb-cap {
+    position: absolute;
+    bottom: 18px; left: 0; right: 0;
+    text-align: center;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: #e8e0d2;
+    font-size: 15px;
+  }
+  .lightbox .btn {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.06);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .2s;
+  }
+  .lightbox .btn:hover { background: rgba(255,255,255,.18); }
+  .lightbox .btn.prev { left: 18px; }
+  .lightbox .btn.next { right: 18px; }
+  .lightbox .btn.close {
+    top: 18px; right: 18px; transform: none;
+    border-radius: 50%;
+    font-size: 18px;
+  }
+  @media (max-width: 640px) {
+    header { padding-top: 44px; }
+    .gallery { padding: 26px 12px 20px; }
+    .lightbox .btn.prev { left: 8px; }
+    .lightbox .btn.next { right: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">WeddCode</div>
+  <h1 id="gTitle">Galeri Foto</h1>
+  <div class="divider"></div>
+  <div class="count" id="gCount"></div>
+</header>
+
+<div class="status" id="statusBox">
+  <div class="spin"></div>
+  <h2>Memuat galeri…</h2>
+</div>
+
+<div class="gallery" id="gallery" style="display:none"></div>
+<button class="loadmore" id="loadMore" hidden>Muat lebih banyak</button>
+
+<footer>Dibuat dengan <span class="heart">&#9825;</span> oleh WeddCode &mdash; Wedding Photo Booth</footer>
+
+<div class="lightbox" id="lightbox">
+  <button class="btn close" id="lbClose" aria-label="Tutup">&times;</button>
+  <button class="btn prev" id="lbPrev" aria-label="Sebelumnya">&#10094;</button>
+  <button class="btn next" id="lbNext" aria-label="Berikutnya">&#10095;</button>
+  <img id="lbImg" alt="">
+  <div class="lb-cap" id="lbCap"></div>
+</div>
+
+<script>
+(function () {
+  // ===== KONFIGURASI =====
+  // Ganti dengan API key Google kamu (buat di Google Cloud Console).
+  // Best practice: batasi key hanya untuk referrer domain GitHub Pages ini.
+  var API_KEY = 'AIzaSyCrqN6HNOwEc861UjD3brs-f1t64U-excA';
+  var PAGE_SIZE = 100;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var gallery = $('gallery'), statusBox = $('statusBox'),
+      countEl = $('gCount'), loadMore = $('loadMore');
+
+  var folderId = null, photos = [], pos = 0, token = null, title = '';
+
+  function params() {
+    var q = location.search.substring(1).split('&'), out = {};
+    for (var i = 0; i < q.length; i++) {
+      var kv = q[i].split('=');
+      if (kv[0]) out[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+    }
+    return out;
+  }
+
+  function showStatus(html, isError) {
+    statusBox.className = 'status' + (isError ? ' err' : '');
+    statusBox.innerHTML = isError ? html : '<div class="spin"></div>' + html;
+    gallery.style.display = 'none';
+  }
+
+  function hideStatus() {
+    statusBox.style.display = 'none';
+    gallery.style.display = '';
+  }
+
+  function thumbUrl(id) {
+    return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w900';
+  }
+  function fullUrl(id) {
+    return 'https://drive.google.com/uc?export=view&id=' + id;
+  }
+  function driveFolderUrl(id) {
+    return 'https://drive.google.com/drive/folders/' + id;
+  }
+
+  function api(url, onOk, onErr) {
+    fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.error) { onErr(j.error); } else { onOk(j); }
+    }).catch(onErr);
+  }
+
+  function fetchFolderName(id, cb) {
+    api('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) +
+        '?fields=name&key=' + API_KEY, function (j) { cb(j.name); }, function () { cb(null); });
+  }
+
+  function fetchPage(next, cb) {
+    var url = 'https://www.googleapis.com/drive/v3/files?q=' +
+      encodeURIComponent("'" + folderId + "' in parents and mimeType contains 'image/'") +
+      '&fields=nextPageToken,files(id,name,createdTime)' +
+      '&pageSize=' + PAGE_SIZE +
+      '&orderBy=createdTime' +
+      (next ? '&pageToken=' + encodeURIComponent(next) : '') +
+      '&key=' + API_KEY;
+    api(url, cb, function (err) {
+      var code = err && err.code;
+      if (code === 403 || code === 404) {
+        showStatus(
+          '<h2>Galeri belum bisa dibuka</h2>' +
+          '<p>Folder Drive ini belum dibagikan sebagai publik. ' +
+          'Di Google Drive, buka folder &rarr; <b>Bagikan</b> &rarr; ' +
+          '<b>Umum</b> &rarr; <b>Siapa saja dengan link</b> &rarr; <b>Penonton</b>. ' +
+          'Atau pastikan link galeri ini benar.</p>', true);
+      } else {
+        showStatus('<h2>Terjadi kesalahan</h2><p>' + (err && err.message ? err.message : 'Gagal memuat galeri. Coba lagi nanti.') + '</p>', true);
+      }
+    });
+  }
+
+  function renderMore() {
+    var frag = document.createDocumentFragment();
+    for (; pos < photos.length; pos++) {
+      var p = photos[pos];
+      var item = document.createElement('div');
+      item.className = 'item';
+      var img = document.createElement('img');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.alt = p.name || 'foto';
+      img.src = thumbUrl(p.id);
+      img.dataset.full = fullUrl(p.id);
+      img.dataset.idx = pos;
+      var cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.textContent = (p.name || '').replace(/\.[^.]+$/, '').replace(/_framed$/, '');
+      item.appendChild(img);
+      item.appendChild(cap);
+      item.addEventListener('click', function () { openLightbox(parseInt(img.dataset.idx, 10)); });
+      frag.appendChild(item);
+    }
+    gallery.appendChild(frag);
+    countEl.textContent = photos.length + ' foto' + (title ? ' \u00b7 ' + title : '');
+    loadMore.hidden = !token;
+  }
+
+  function nextPage() {
+    if (!token) { loadMore.hidden = true; return; }
+    fetchPage(token, function (j) {
+      if (j.files && j.files.length) {
+        photos = photos.concat(j.files);
+        renderMore();
+      }
+      token = j.nextPageToken || null;
+      loadMore.hidden = !token;
+    });
+  }
+
+  function openLightbox(idx) {
+    pos = idx;
+    lbImg.src = fullUrl(photos[idx].id);
+    lbCap.textContent = (photos[idx].name || '').replace(/\.[^.]+$/, '');
+    lightbox.classList.add('open');
+  }
+  function closeLightbox() { lightbox.classList.remove('open'); lbImg.src = ''; }
+  function step(dir) {
+    var n = (pos + dir + photos.length) % photos.length;
+    openLightbox(n);
+  }
+
+  var lightbox = $('lightbox'), lbImg = $('lbImg'), lbCap = $('lbCap');
+  $('lbClose').addEventListener('click', closeLightbox);
+  $('lbPrev').addEventListener('click', function () { step(-1); });
+  $('lbNext').addEventListener('click', function () { step(1); });
+  lightbox.addEventListener('click', function (e) { if (e.target === lightbox) closeLightbox(); });
+  document.addEventListener('keydown', function (e) {
+    if (!lightbox.classList.contains('open')) return;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowRight') step(1);
+  });
+  loadMore.addEventListener('click', nextPage);
+
+  var p = params();
+  folderId = p.id || p.folder || p.folderId || null;
+  title = p.title ? p.title.replace(/\+/g, ' ') : '';
+
+  if (!folderId) {
+    showStatus(
+      '<h2>Link galeri tidak lengkap</h2>' +
+      '<p>Link galeri harus memuat ID folder Drive, misalnya:<br>' +
+      '<code style="color:#b08d57">?id=1AbC3dEfGhIjKlMnOpQrStUvWxYz</code></p>' +
+      '<p style="margin-top:14px">Link ini dibuat otomatis oleh aplikasi WeddCode saat folder dibuat.</p>', true);
+    return;
+  }
+
+  document.title = (title ? title + ' \u00b7 ' : '') + 'WeddCode Gallery';
+  if (title) $('gTitle').textContent = title;
+
+  fetchFolderName(folderId, function (name) {
+    if (name && !title) { $('gTitle').textContent = name; }
+  });
+
+  fetchPage(null, function (j) {
+    photos = j.files || [];
+    token = j.nextPageToken || null;
+    if (!photos.length) {
+      showStatus('<h2>Belum ada foto</h2><p>Folder ini masih kosong. Foto-foto akan muncul otomatis begitu ada yang diunggah.</p>');
+      return;
+    }
+    hideStatus();
+    renderMore();
+    loadMore.hidden = !token;
+  });
+})();
+</script>
+</body>
+</html>
