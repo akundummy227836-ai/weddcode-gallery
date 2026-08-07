@@ -376,6 +376,8 @@
     });
   }
 
+  var lightbox = $('lightbox'), lbImg = $('lbImg'), lbDl = $('lbDownload'), lbDlText = $('lbDlText');
+
   // Swipe kiri/kanan untuk pindah foto (HP)
   var touchX = null;
   lightbox.addEventListener('touchstart', function (e) {
@@ -388,7 +390,6 @@
     if (Math.abs(dx) > 48) { if (dx < 0) step(1); else step(-1); }
   }, { passive: true });
 
-  var lightbox = $('lightbox'), lbImg = $('lbImg'), lbDl = $('lbDownload'), lbDlText = $('lbDlText');
   $('lbClose').addEventListener('click', closeLightbox);
   $('lbPrev').addEventListener('click', function () { step(-1); });
   $('lbNext').addEventListener('click', function () { step(1); });
