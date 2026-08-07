@@ -286,6 +286,24 @@
   function fullUrl(id) {
     return 'https://drive.google.com/uc?export=view&id=' + id;
   }
+
+  // Thumbnail Drive bikin gagal di request pertama (cache belum ada),
+  // jadi muat ulang otomatis dengan ukuran berbeda sampai berhasil,
+  // lalu fallback ke file asli jika tetap gagal.
+  var THUMB_SIZES = ['w600', 'w900', 'w1200', 'w1600', 'w2000'];
+  function attachThumb(img, id) {
+    var tries = 0;
+    var load = function () {
+      if (tries >= THUMB_SIZES.length) {
+        img.onerror = null;
+        img.src = fullUrl(id);
+        return;
+      }
+      img.src = thumbUrl(id, THUMB_SIZES[tries++]);
+    };
+    img.onerror = function () { setTimeout(load, 1200); };
+    load();
+  }
   function driveFolderUrl(id) {
     return 'https://drive.google.com/drive/folders/' + id;
   }
@@ -347,7 +365,7 @@
     image.loading = 'lazy';
     image.decoding = 'async';
     image.alt = p.name || 'foto';
-    image.src = thumbUrl(p.id);
+    attachThumb(image, p.id);
     item.appendChild(image);
     var dlMini = document.createElement('button');
     dlMini.className = 'dl-mini';
@@ -446,9 +464,7 @@
     curId = fid;
     var photo = findPhoto(fid);
     if (!photo) return;
-    // Tampilkan pakai thumbnail ukuran besar (lebih andal daripada uc?export=view
-    // yang sering diblokir/ditahan Google).
-    lbImg.src = thumbUrl(photo.id, 'w2000');
+    attachThumb(lbImg, photo.id);
     lightbox.classList.add('open');
   }
   function closeLightbox() { lightbox.classList.remove('open'); lbImg.src = ''; lbDl.disabled = false; lbDlText.textContent = 'Simpan foto ini'; }
@@ -570,6 +586,7 @@
     if (j.files && j.files.length) {
       var logo = $('vendorLogo');
       logo.src = thumbUrl(j.files[0].id);
+      logo.onerror = function () { logo.style.display = 'none'; };
       logo.onload = function () {
         logo.style.display = 'block';
         var br = $('gBrand');
