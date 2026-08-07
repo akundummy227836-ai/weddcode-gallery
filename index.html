@@ -35,6 +35,12 @@
     text-transform: uppercase;
     color: var(--gold);
   }
+  header .vendor-logo {
+    max-width: 180px;
+    max-height: 90px;
+    object-fit: contain;
+    margin-bottom: 6px;
+  }
   header h1 {
     font-family: 'Playfair Display', serif;
     font-size: clamp(28px, 5vw, 48px);
@@ -90,17 +96,6 @@
   }
   .item:hover { transform: translateY(-4px) rotate(-.4deg); box-shadow: 0 10px 28px rgba(43,38,32,.16); }
   .item img { width: 100%; display: block; border-radius: 2px; background: #efe9df; }
-  .item .cap {
-    font-family: 'Playfair Display', serif;
-    font-style: italic;
-    font-size: 13px;
-    color: var(--muted);
-    text-align: center;
-    padding-top: 10px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
   .loadmore {
     display: block;
     margin: 10px auto 60px;
@@ -143,15 +138,27 @@
     box-shadow: 0 8px 60px rgba(0,0,0,.6);
     border-radius: 3px;
   }
-  .lightbox .lb-cap {
+  .lightbox .dl {
     position: absolute;
-    bottom: 18px; left: 0; right: 0;
-    text-align: center;
-    font-family: 'Playfair Display', serif;
-    font-style: italic;
-    color: #e8e0d2;
-    font-size: 15px;
+    bottom: 22px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 26px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--gold);
+    border: none;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: background .2s, transform .2s;
+    text-decoration: none;
   }
+  .lightbox .dl:hover { background: #9c7a45; transform: translateX(-50%) scale(1.03); }
+  .lightbox .dl:disabled { opacity: .6; cursor: default; transform: translateX(-50%); }
+  .lightbox .dl .dl-icon { font-size: 15px; line-height: 1; }
   .lightbox .btn {
     position: absolute;
     top: 50%; transform: translateY(-50%);
@@ -184,7 +191,8 @@
 <body>
 
 <header>
-  <div class="brand">WeddCode</div>
+  <img class="vendor-logo" id="vendorLogo" alt="logo" style="display:none">
+  <div class="brand" id="gBrand">WeddCode</div>
   <h1 id="gTitle">Galeri Foto</h1>
   <div class="divider"></div>
   <div class="count" id="gCount"></div>
@@ -205,7 +213,7 @@
   <button class="btn prev" id="lbPrev" aria-label="Sebelumnya">&#10094;</button>
   <button class="btn next" id="lbNext" aria-label="Berikutnya">&#10095;</button>
   <img id="lbImg" alt="">
-  <div class="lb-cap" id="lbCap"></div>
+  <button class="dl" id="lbDownload"><span class="dl-icon">&#8595;</span><span id="lbDlText">Simpan foto ini</span></button>
 </div>
 
 <script>
@@ -220,7 +228,7 @@
   var gallery = $('gallery'), statusBox = $('statusBox'),
       countEl = $('gCount'), loadMore = $('loadMore');
 
-  var folderId = null, photos = [], pos = 0, token = null, title = '';
+  var folderId = null, photos = [], pos = 0, cur = -1, token = null, title = '', vendorLogoId = null;
 
   function params() {
     var q = location.search.substring(1).split('&'), out = {};
@@ -265,10 +273,10 @@
 
   function fetchPage(next, cb) {
     var url = 'https://www.googleapis.com/drive/v3/files?q=' +
-      encodeURIComponent("'" + folderId + "' in parents and mimeType contains 'image/'") +
+      encodeURIComponent("'" + folderId + "' in parents and mimeType contains 'image/' and name != 'vendor_logo.png'") +
       '&fields=nextPageToken,files(id,name,createdTime)' +
       '&pageSize=' + PAGE_SIZE +
-      '&orderBy=createdTime' +
+      '&orderBy=createdTime desc' +
       (next ? '&pageToken=' + encodeURIComponent(next) : '') +
       '&key=' + API_KEY;
     api(url, cb, function (err) {
@@ -310,11 +318,7 @@
       img.src = thumbUrl(p.id);
       img.dataset.full = fullUrl(p.id);
       img.dataset.idx = pos;
-      var cap = document.createElement('div');
-      cap.className = 'cap';
-      cap.textContent = (p.name || '').replace(/\.[^.]+$/, '').replace(/_framed$/, '');
       item.appendChild(img);
-      item.appendChild(cap);
       item.addEventListener('click', function () { openLightbox(parseInt(img.dataset.idx, 10)); });
       frag.appendChild(item);
     }
@@ -336,21 +340,59 @@
   }
 
   function openLightbox(idx) {
-    pos = idx;
+    cur = idx;
     lbImg.src = fullUrl(photos[idx].id);
-    lbCap.textContent = (photos[idx].name || '').replace(/\.[^.]+$/, '');
     lightbox.classList.add('open');
   }
-  function closeLightbox() { lightbox.classList.remove('open'); lbImg.src = ''; }
+  function closeLightbox() { lightbox.classList.remove('open'); lbImg.src = ''; lbDl.classList.remove('busy'); lbDl.disabled = false; lbDlText.textContent = 'Simpan foto ini'; }
   function step(dir) {
-    var n = (pos + dir + photos.length) % photos.length;
+    var n = (cur + dir + photos.length) % photos.length;
     openLightbox(n);
   }
 
-  var lightbox = $('lightbox'), lbImg = $('lbImg'), lbCap = $('lbCap');
+  // Tombol "Simpan foto ini": ambil file asli via Drive lalu unduh lewat blob
+  // (agar selalu file full-res, bukan versi kompresi).
+  function downloadCurrent() {
+    var p = photos[cur];
+    if (!p) return;
+    lbDl.disabled = true;
+    lbDlText.textContent = 'Menyiapkan...';
+    fetch(fullUrl(p.id)).then(function (r) { return r.blob(); }).then(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (p.name || 'foto') || 'foto';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+        lbDl.disabled = false;
+        lbDlText.textContent = 'Simpan foto ini';
+      }, 1200);
+    }).catch(function () {
+      lbDl.disabled = false;
+      lbDlText.textContent = 'Gagal, coba lagi';
+      setTimeout(function () { lbDlText.textContent = 'Simpan foto ini'; }, 1800);
+    });
+  }
+
+  // Swipe kiri/kanan untuk pindah foto (HP)
+  var touchX = null;
+  lightbox.addEventListener('touchstart', function (e) {
+    touchX = e.touches[0].clientX;
+  }, { passive: true });
+  lightbox.addEventListener('touchend', function (e) {
+    if (touchX === null) return;
+    var dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) > 48) { if (dx < 0) step(1); else step(-1); }
+  }, { passive: true });
+
+  var lightbox = $('lightbox'), lbImg = $('lbImg'), lbDl = $('lbDownload'), lbDlText = $('lbDlText');
   $('lbClose').addEventListener('click', closeLightbox);
   $('lbPrev').addEventListener('click', function () { step(-1); });
   $('lbNext').addEventListener('click', function () { step(1); });
+  lbDl.addEventListener('click', downloadCurrent);
   lightbox.addEventListener('click', function (e) { if (e.target === lightbox) closeLightbox(); });
   document.addEventListener('keydown', function (e) {
     if (!lightbox.classList.contains('open')) return;
@@ -379,6 +421,22 @@
   fetchFolderName(folderId, function (name) {
     if (name && !title) { $('gTitle').textContent = name; }
   });
+
+  // Logo vendor: cari file "vendor_logo.png" di folder Drive, tampilkan di header.
+  fetch('https://www.googleapis.com/drive/v3/files?q=' +
+    encodeURIComponent("'" + folderId + "' in parents and name = 'vendor_logo.png' and trashed = false") +
+    '&fields=files(id)' +
+    '&key=' + API_KEY).then(function (r) { return r.json(); }).then(function (j) {
+    if (j.files && j.files.length) {
+      var logo = $('vendorLogo');
+      logo.src = thumbUrl(j.files[0].id);
+      logo.onload = function () {
+        logo.style.display = 'block';
+        var br = $('gBrand');
+        if (br) br.style.display = 'none';
+      };
+    }
+  }).catch(function () {});
 
   fetchPage(null, function (j) {
     photos = j.files || [];
