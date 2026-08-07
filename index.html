@@ -161,7 +161,7 @@
     max-height: 88vh;
     box-shadow: 0 8px 60px rgba(0,0,0,.6);
     border-radius: 3px;
-    transition: transform .3s ease-out;
+    transition: transform .16s cubic-bezier(.25,.8,.35,1);
     will-change: transform;
   }
   .lightbox img.dragging { transition: none; }
@@ -482,9 +482,11 @@
     lightbox.classList.add('open');
   }
   function closeLightbox() {
+    navToken++;
     lightbox.classList.remove('open');
     lbImg.src = '';
     lbImg.style.transform = 'translateX(0)';
+    lbImg.classList.remove('dragging');
     lbDl.disabled = false;
     lbDlText.textContent = 'Simpan foto ini';
   }
@@ -495,22 +497,24 @@
     openLightbox(photos[n].id);
   }
 
-  // Animasi geser halus: foto keluar dari layar, ganti foto, lalu masuk lagi.
-  var animBusy = false;
+  // Animasi geser cepat: foto keluar (140ms), ganti foto, lalu masuk (160ms).
+  // Token dipakai agar animasi yang tertunda tidak "menghidupkan" lightbox
+  // yang sudah ditutup, dan tombol tidak pernah terkunci.
+  var navToken = 0;
   function slideTo(dir) {
-    if (animBusy || !curId) return;
-    animBusy = true;
-    var dist = Math.max((lbImg.clientWidth || window.innerWidth) * 0.85, 220);
+    if (!curId) return;
+    var token = navToken;
+    var dist = Math.max((lbImg.clientWidth || window.innerWidth) * 0.6, 160);
     lbImg.style.transform = 'translateX(' + (dir > 0 ? -dist : dist) + 'px)';
     setTimeout(function () {
+      if (token !== navToken) return;
       step(dir);
       lbImg.classList.add('no-anim');
       lbImg.style.transform = 'translateX(' + (dir > 0 ? dist : -dist) + 'px)';
       void lbImg.offsetWidth;
       lbImg.classList.remove('no-anim');
       lbImg.style.transform = 'translateX(0)';
-      animBusy = false;
-    }, 280);
+    }, 140);
   }
 
   // Tombol "Simpan foto ini". Mengunduh langsung di dalam halaman (tanpa
